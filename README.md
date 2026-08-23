@@ -108,3 +108,23 @@ https://alphacephei.com/vosk/models/vosk-model-en-us-0.22-lgraph.zip
   development and demos, but isn't representative of how a real production
   auth system would store credentials.
 
+## Generative AI Tool Use
+
+In line with the SOFTENG 310 assignment brief, team members disclose their
+own use of generative AI tools below.
+
+- **Gabriel Liu**: Used Claude for planning and guidance on new features,
+  with some code written by the AI and reviewed before committing; used it
+  to help debug issues that came up while getting the app running; some test
+  cases were AI-generated; and used it for refactoring suggestions on
+  existing code. All AI-assisted output was reviewed and tested before being
+  committed.
+
+- **Dandan Wu**: Used ChatGPT for: 
+  1: Analysing error messages and locating affected classes.
+  2: Find xvfb solution to avoid SonarCloud running forever.
+  3: Finding a method to fake Ai service without changing initial controller
+  code. 
+  4: Generated follow up test cases from initially written test cases.
+  5: Explanation of why unable to achieve particular branch for coverage. 
+  All AI-assisted output was reviewed and tested before committed.
