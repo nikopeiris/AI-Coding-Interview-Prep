@@ -76,8 +76,11 @@ AI Coding Interview Prep is an AI-supported interview preparation tool that help
 2. Use the included Maven wrapper:
    - Windows: `./mvnw.cmd`
    - macOS/Linux: `./mvnw`
-3. Run the app with `./mvnw javafx:run`.
-4. Run tests with `./mvnw test`.
+3. Copy `.env.example` to `.env` and set `OPENAI_API_KEY` - required for
+   question generation and AI answer evaluation (voice input runs offline
+   and doesn't need this).
+4. Run the app with `./mvnw javafx:run`.
+5. Run tests with `./mvnw test`.
 
 ## Quality Tools
 
@@ -108,3 +111,25 @@ PR #25 also was not merged with squash and merge, causing main branch consisting
 A full scan of the project on `main` confirmed no open vulnerabilities:
 
 ![Snyk Clean Scan](images/snyk-clean-scan.png)
+
+## Meeting Minutes
+
+**Cadence:** In-person every Monday after lecture; online every Thursday at 7pm.
+
+Each entry below should record: date and format (in-person/online), who attended,
+topics discussed, decisions made (especially any change to how we manage the
+project - workflow, labels, review process, scope), issues/PRs referenced, and
+action items for the next meeting.
+
+### Template
+
+```
+### YYYY-MM-DD (In-person / Online)
+**Attendees:** 
+**Topics discussed:** 
+**Decisions made:** 
+**Issues/PRs referenced:** 
+**Action items:** 
+```
+
+<!-- Add one entry per meeting above this line, most recent first. -->

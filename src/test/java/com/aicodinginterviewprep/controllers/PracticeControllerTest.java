@@ -11,15 +11,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import com.aicodinginterviewprep.MicrophoneRecorder;
 import com.aicodinginterviewprep.QuestionType;
 import com.aicodinginterviewprep.SceneManager;
 import com.aicodinginterviewprep.service.OpenAiQuestionService;
+import com.aicodinginterviewprep.service.SpeechToTextService;
 
 import javafx.application.Platform;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
 import javafx.stage.Stage;
+
+import javax.sound.sampled.LineUnavailableException;
 
 class PracticeControllerTest {
 
@@ -107,6 +112,57 @@ class PracticeControllerTest {
     }
 
     @Test
+    void setSceneManager_submitButtonDisabledWhenAnswerIsEmpty() throws Exception {
+        runOnFxThreadAndWait(() -> {
+            PracticeController controller = createController();
+            FakeSceneManager sceneManager = new FakeSceneManager();
+
+            controller.setSceneManager(sceneManager);
+
+            assertTrue(controller.buttonSubmitAnswer.isDisabled());
+        });
+    }
+
+    @Test
+    void typingAnAnswerEnablesSubmitButton() throws Exception {
+        runOnFxThreadAndWait(() -> {
+            PracticeController controller = createController();
+            controller.setSceneManager(new FakeSceneManager());
+
+            controller.answerInput.setText("My explanation");
+
+            assertFalse(controller.buttonSubmitAnswer.isDisabled());
+        });
+    }
+
+    @Test
+    void whitespaceOnlyAnswerKeepsSubmitButtonDisabled() throws Exception {
+        runOnFxThreadAndWait(() -> {
+            PracticeController controller = createController();
+            controller.setSceneManager(new FakeSceneManager());
+
+            controller.answerInput.setText("   ");
+
+            assertTrue(controller.buttonSubmitAnswer.isDisabled());
+        });
+    }
+
+    @Test
+    void clearingTheAnswerDisablesSubmitButtonAgain() throws Exception {
+        runOnFxThreadAndWait(() -> {
+            PracticeController controller = createController();
+            controller.setSceneManager(new FakeSceneManager());
+
+            controller.answerInput.setText("My explanation");
+            assertFalse(controller.buttonSubmitAnswer.isDisabled());
+
+            controller.answerInput.clear();
+
+            assertTrue(controller.buttonSubmitAnswer.isDisabled());
+        });
+    }
+
+    @Test
     void onReturn_switchesToHomeScene() throws Exception {
         runOnFxThreadAndWait(() -> {
             PracticeController controller = createController();
@@ -161,15 +217,15 @@ class PracticeControllerTest {
             controller.runEvaluation();
 
             assertEquals(
-                    controller.questionOutput,
-                    feedbackController.receivedQuestionOutput
+                    controller.questionOutput.getText(),
+                    feedbackController.receivedQuestion
             );
 
-            assertNull(feedbackController.receivedCodeEditor);
+            assertEquals("", feedbackController.receivedCode);
 
             assertEquals(
-                    controller.answerInput,
-                    feedbackController.receivedAnswerInput
+                    controller.answerInput.getText(),
+                    feedbackController.receivedExplanation
             );
 
             assertEquals("practice", feedbackController.receivedReturnScene);
@@ -236,8 +292,32 @@ class PracticeControllerTest {
         controller.buttonSubmitAnswer = new Button();
         controller.buttonGenerateQuestion = new Button();
         controller.buttonCodingPractice = new Button();
+        controller.buttonVoiceInput = new Button();
+        controller.labelVoiceStatus = new Label();
+        controller.labelLoggedInAs = new Label();
+        controller.buttonLogOut = new Button();
 
         return controller;
+    }
+
+    private void setMicrophoneRecorder(PracticeController controller, MicrophoneRecorder recorder) {
+        try {
+            Field field = PracticeController.class.getDeclaredField("microphoneRecorder");
+            field.setAccessible(true);
+            field.set(controller, recorder);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void setSpeechToTextService(PracticeController controller, SpeechToTextService service) {
+        try {
+            Field field = PracticeController.class.getDeclaredField("speechToTextService");
+            field.setAccessible(true);
+            field.set(controller, service);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private static class FakeSceneManager extends SceneManager {
@@ -300,10 +380,12 @@ class PracticeControllerTest {
             setQuestionService(controller, service);
 
             controller.answerInput.setText("My old answer from the previous question");
+            assertFalse(controller.buttonSubmitAnswer.isDisabled());
 
             controller.onGenerateQuestion();
 
             assertEquals("", controller.answerInput.getText());
+            assertTrue(controller.buttonSubmitAnswer.isDisabled());
         });
 
         service.release();
@@ -493,26 +575,332 @@ class PracticeControllerTest {
         });
     }
 
+    @Test
+    void setSceneManager_voiceButtonDisabledInitially() throws Exception {
+        runOnFxThreadAndWait(() -> {
+            PracticeController controller = createController();
+
+            controller.setSceneManager(new FakeSceneManager());
+
+            assertTrue(controller.buttonVoiceInput.isDisabled());
+        });
+    }
+
+    @Test
+    void onGenerateQuestion_successEnablesVoiceButton() throws Exception {
+        FakeQuestionService service = new FakeQuestionService("A question");
+        PracticeController[] holder = new PracticeController[1];
+        CountDownLatch completed = new CountDownLatch(1);
+
+        runOnFxThreadAndWait(() -> {
+            PracticeController controller = createController();
+            holder[0] = controller;
+
+            controller.setSceneManager(new FakeSceneManager());
+            setQuestionService(controller, service);
+
+            controller.questionOutput.textProperty().addListener((observable, oldValue, newValue) -> {
+                if ("A question".equals(newValue)) {
+                    completed.countDown();
+                }
+            });
+
+            controller.onGenerateQuestion();
+        });
+
+        assertTrue(completed.await(5, TimeUnit.SECONDS));
+
+        runOnFxThreadAndWait(() -> assertFalse(holder[0].buttonVoiceInput.isDisabled()));
+    }
+
+    @Test
+    void onVoiceInput_startsRecording_whenNotRecording() throws Exception {
+        runOnFxThreadAndWait(() -> {
+            PracticeController controller = createController();
+            controller.setSceneManager(new FakeSceneManager());
+            FakeMicrophoneRecorder recorder = new FakeMicrophoneRecorder();
+            setMicrophoneRecorder(controller, recorder);
+
+            controller.onVoiceInput();
+
+            assertTrue(recorder.isRecording());
+            assertEquals("Stop Recording", controller.buttonVoiceInput.getText());
+            assertTrue(controller.buttonVoiceInput.getStyleClass().contains("recording"));
+        });
+    }
+
+    @Test
+    void onVoiceInput_micUnavailable_showsErrorAndStaysIdle() throws Exception {
+        runOnFxThreadAndWait(() -> {
+            PracticeController controller = createController();
+            controller.setSceneManager(new FakeSceneManager());
+            FakeMicrophoneRecorder recorder = new FakeMicrophoneRecorder();
+            recorder.throwOnStart = true;
+            setMicrophoneRecorder(controller, recorder);
+
+            controller.onVoiceInput();
+
+            assertFalse(recorder.isRecording());
+            assertTrue(controller.labelVoiceStatus.getText().contains("Microphone unavailable"));
+        });
+    }
+
+    @Test
+    void onVoiceInput_whenRecording_stopsAndTranscribesIntoAnswer() throws Exception {
+        FakeMicrophoneRecorder recorder = new FakeMicrophoneRecorder();
+        FakeSpeechToTextService speechService = new FakeSpeechToTextService("Hello from voice");
+
+        PracticeController[] holder = new PracticeController[1];
+        CountDownLatch completed = new CountDownLatch(1);
+
+        runOnFxThreadAndWait(() -> {
+            PracticeController controller = createController();
+            holder[0] = controller;
+            controller.setSceneManager(new FakeSceneManager());
+            controller.answerInput.setDisable(false);
+            setMicrophoneRecorder(controller, recorder);
+            setSpeechToTextService(controller, speechService);
+
+            controller.answerInput.textProperty().addListener((observable, oldValue, newValue) -> {
+                if ("Hello from voice".equals(newValue)) {
+                    completed.countDown();
+                }
+            });
+
+            controller.onVoiceInput();
+            controller.onVoiceInput();
+        });
+
+        assertTrue(completed.await(5, TimeUnit.SECONDS));
+
+        runOnFxThreadAndWait(() -> {
+            assertEquals("Hello from voice", holder[0].answerInput.getText());
+            assertEquals("Record Answer", holder[0].buttonVoiceInput.getText());
+            assertFalse(holder[0].buttonVoiceInput.isDisabled());
+        });
+    }
+
+    @Test
+    void onVoiceInput_appendsToExistingAnswerText() throws Exception {
+        FakeMicrophoneRecorder recorder = new FakeMicrophoneRecorder();
+        FakeSpeechToTextService speechService = new FakeSpeechToTextService("second part");
+
+        PracticeController[] holder = new PracticeController[1];
+        CountDownLatch completed = new CountDownLatch(1);
+
+        runOnFxThreadAndWait(() -> {
+            PracticeController controller = createController();
+            holder[0] = controller;
+            controller.setSceneManager(new FakeSceneManager());
+            setMicrophoneRecorder(controller, recorder);
+            setSpeechToTextService(controller, speechService);
+            controller.answerInput.setText("first part");
+
+            controller.answerInput.textProperty().addListener((observable, oldValue, newValue) -> {
+                if ("first part second part".equals(newValue)) {
+                    completed.countDown();
+                }
+            });
+
+            controller.onVoiceInput();
+            controller.onVoiceInput();
+        });
+
+        assertTrue(completed.await(5, TimeUnit.SECONDS));
+
+        runOnFxThreadAndWait(() ->
+                assertEquals("first part second part", holder[0].answerInput.getText()));
+    }
+
+    @Test
+    void onVoiceInput_transcriptionFailure_showsErrorAndResetsButton() throws Exception {
+        FakeMicrophoneRecorder recorder = new FakeMicrophoneRecorder();
+        FailingSpeechToTextService speechService = new FailingSpeechToTextService("Network error");
+
+        PracticeController[] holder = new PracticeController[1];
+        CountDownLatch completed = new CountDownLatch(1);
+
+        runOnFxThreadAndWait(() -> {
+            PracticeController controller = createController();
+            holder[0] = controller;
+            controller.setSceneManager(new FakeSceneManager());
+            controller.answerInput.setDisable(false);
+            setMicrophoneRecorder(controller, recorder);
+            setSpeechToTextService(controller, speechService);
+
+            controller.labelVoiceStatus.textProperty().addListener((observable, oldValue, newValue) -> {
+                if (newValue.startsWith("Transcription failed")) {
+                    completed.countDown();
+                }
+            });
+
+            controller.onVoiceInput();
+            controller.onVoiceInput();
+        });
+
+        assertTrue(completed.await(5, TimeUnit.SECONDS));
+
+        runOnFxThreadAndWait(() -> {
+            assertTrue(holder[0].labelVoiceStatus.getText().contains("Network error"));
+            assertEquals("Record Answer", holder[0].buttonVoiceInput.getText());
+            assertFalse(holder[0].buttonVoiceInput.isDisabled());
+        });
+    }
+
+    @Test
+    void onVoiceInput_emptyTranscription_showsDidntCatchMessageAndDoesNotTouchAnswer() throws Exception {
+        FakeMicrophoneRecorder recorder = new FakeMicrophoneRecorder();
+        FakeSpeechToTextService speechService = new FakeSpeechToTextService("");
+
+        PracticeController[] holder = new PracticeController[1];
+        CountDownLatch completed = new CountDownLatch(1);
+
+        runOnFxThreadAndWait(() -> {
+            PracticeController controller = createController();
+            holder[0] = controller;
+            controller.setSceneManager(new FakeSceneManager());
+            controller.answerInput.setDisable(false);
+            setMicrophoneRecorder(controller, recorder);
+            setSpeechToTextService(controller, speechService);
+
+            controller.labelVoiceStatus.textProperty().addListener((observable, oldValue, newValue) -> {
+                if ("Didn't catch that - try again.".equals(newValue)) {
+                    completed.countDown();
+                }
+            });
+
+            controller.onVoiceInput();
+            controller.onVoiceInput();
+        });
+
+        assertTrue(completed.await(5, TimeUnit.SECONDS));
+
+        runOnFxThreadAndWait(() -> {
+            assertEquals("", holder[0].answerInput.getText());
+            assertEquals("Record Answer", holder[0].buttonVoiceInput.getText());
+            assertFalse(holder[0].buttonVoiceInput.isDisabled());
+        });
+    }
+
+    @Test
+    void onSceneShown_withLoggedInUser_showsUsername() throws Exception {
+        runOnFxThreadAndWait(() -> {
+            PracticeController controller = createController();
+            FakeSceneManager sceneManager = new FakeSceneManager();
+            controller.setSceneManager(sceneManager);
+            sceneManager.setCurrentUsername("gabriel");
+
+            controller.onSceneShown();
+
+            assertEquals("Logged in as gabriel", controller.labelLoggedInAs.getText());
+        });
+    }
+
+    @Test
+    void onSceneShown_withNoLoggedInUser_showsEmptyLabel() throws Exception {
+        runOnFxThreadAndWait(() -> {
+            PracticeController controller = createController();
+            controller.setSceneManager(new FakeSceneManager());
+
+            controller.onSceneShown();
+
+            assertEquals("", controller.labelLoggedInAs.getText());
+        });
+    }
+
+    @Test
+    void onLogOut_clearsUsernameAndNavigatesHome() throws Exception {
+        runOnFxThreadAndWait(() -> {
+            PracticeController controller = createController();
+            FakeSceneManager sceneManager = new FakeSceneManager();
+            controller.setSceneManager(sceneManager);
+            sceneManager.setCurrentUsername("gabriel");
+
+            controller.onLogOut();
+
+            assertNull(sceneManager.getCurrentUsername());
+            assertEquals("home", sceneManager.lastScene);
+        });
+    }
+
+    @Test
+    void onLogOut_stopsActiveRecording() throws Exception {
+        runOnFxThreadAndWait(() -> {
+            PracticeController controller = createController();
+            controller.setSceneManager(new FakeSceneManager());
+            FakeMicrophoneRecorder recorder = new FakeMicrophoneRecorder();
+            setMicrophoneRecorder(controller, recorder);
+
+            controller.onVoiceInput();
+            assertTrue(recorder.isRecording());
+
+            controller.onLogOut();
+
+            assertFalse(recorder.isRecording());
+        });
+    }
+
+    @Test
+    void onReturn_stopsActiveRecording() throws Exception {
+        runOnFxThreadAndWait(() -> {
+            PracticeController controller = createController();
+            FakeSceneManager sceneManager = new FakeSceneManager();
+            controller.setSceneManager(sceneManager);
+            FakeMicrophoneRecorder recorder = new FakeMicrophoneRecorder();
+            setMicrophoneRecorder(controller, recorder);
+
+            controller.onVoiceInput();
+            assertTrue(recorder.isRecording());
+
+            controller.onReturn();
+
+            assertFalse(recorder.isRecording());
+            assertEquals("home", sceneManager.lastScene);
+        });
+    }
+
+    @Test
+    void onGenerateQuestion_stopsActiveRecording() throws Exception {
+        BlockingQuestionService service = new BlockingQuestionService();
+
+        runOnFxThreadAndWait(() -> {
+            PracticeController controller = createController();
+            controller.setSceneManager(new FakeSceneManager());
+            setQuestionService(controller, service);
+            FakeMicrophoneRecorder recorder = new FakeMicrophoneRecorder();
+            setMicrophoneRecorder(controller, recorder);
+
+            controller.onVoiceInput();
+            assertTrue(recorder.isRecording());
+
+            controller.onGenerateQuestion();
+
+            assertFalse(recorder.isRecording());
+        });
+
+        service.release();
+    }
+
     private static class FakeFeedbackController
         extends FeedbackController {
 
-        TextArea receivedQuestionOutput;
-        TextArea receivedCodeEditor;
-        javafx.scene.control.TextInputControl receivedAnswerInput;
+        String receivedQuestion;
+        String receivedCode;
+        String receivedExplanation;
         String receivedReturnScene;
 
         boolean evaluationCalled = false;
 
         @Override
         public void setAnswerControls(
-                TextArea questionOutput,
-                TextArea codeEditor,
-                javafx.scene.control.TextInputControl answerInput,
+                String question,
+                String code,
+                String explanation,
                 String returnScene) {
 
-            this.receivedQuestionOutput = questionOutput;
-            this.receivedCodeEditor = codeEditor;
-            this.receivedAnswerInput = answerInput;
+            this.receivedQuestion = question;
+            this.receivedCode = code;
+            this.receivedExplanation = explanation;
             this.receivedReturnScene = returnScene;
         }
 
@@ -586,6 +974,59 @@ class PracticeControllerTest {
             throw new RuntimeException(
                     "Test API failure"
             );
+        }
+    }
+
+    private static class FakeMicrophoneRecorder extends MicrophoneRecorder {
+        boolean throwOnStart;
+        byte[] audioToReturn = new byte[] {1, 2, 3};
+        private boolean recording;
+
+        @Override
+        public void startRecording() throws LineUnavailableException {
+            if (throwOnStart) {
+                throw new LineUnavailableException("No microphone found");
+            }
+            recording = true;
+        }
+
+        @Override
+        public byte[] stopRecording() {
+            recording = false;
+            return audioToReturn;
+        }
+
+        @Override
+        public boolean isRecording() {
+            return recording;
+        }
+    }
+
+    private static class FakeSpeechToTextService extends SpeechToTextService {
+        private final String result;
+        byte[] receivedAudio;
+
+        FakeSpeechToTextService(String result) {
+            this.result = result;
+        }
+
+        @Override
+        public String transcribe(byte[] wavAudio) {
+            receivedAudio = wavAudio;
+            return result;
+        }
+    }
+
+    private static class FailingSpeechToTextService extends SpeechToTextService {
+        private final String message;
+
+        FailingSpeechToTextService(String message) {
+            this.message = message;
+        }
+
+        @Override
+        public String transcribe(byte[] wavAudio) {
+            throw new RuntimeException(message);
         }
     }
 }

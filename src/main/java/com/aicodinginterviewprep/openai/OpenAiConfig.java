@@ -10,6 +10,7 @@ public class OpenAiConfig {
 
     public static final String API_URL = "https://api.openai.com/v1/chat/completions";
     public static final String DEFAULT_MODEL = "gpt-5-nano";
+    // gpt-5-nano only accepts the default temperature (1) - it 400s on anything else.
     public static final double DEFAULT_TEMPERATURE = 1;
     public static final double DEFAULT_TOP_P = 1.0;
     public static final int DEFAULT_MAX_COMPLETION_TOKENS = 4000; // Limits response length for fast evaluation

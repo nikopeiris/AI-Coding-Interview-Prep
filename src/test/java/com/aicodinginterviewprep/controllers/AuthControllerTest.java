@@ -104,6 +104,26 @@ class AuthControllerTest {
     }
 
     @Test
+    void signUpWithNewAccount_setsCurrentUsernameOnSceneManager(@TempDir Path tempDir) throws Exception {
+        runOnFxThreadAndWait(() -> {
+            try {
+                AuthController controller = createController();
+                FakeSceneManager sceneManager = new FakeSceneManager();
+                controller.setSceneManager(sceneManager);
+                useTempAuthenticator(controller, tempDir.resolve("accounts.json"));
+
+                controller.textfieldUsername.setText("alice");
+                controller.passwordfieldPassword.setText("secret123");
+                controller.onSignUp();
+
+                assertEquals("alice", sceneManager.getCurrentUsername());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    @Test
     void signUpWithBlankUsernameShowsMessageAndDoesNotNavigate(@TempDir Path tempDir) throws Exception {
         runOnFxThreadAndWait(() -> {
             try {
@@ -138,6 +158,8 @@ class AuthControllerTest {
                 controller.onSignUp();
 
                 sceneManager.lastScene = null;
+                controller.textfieldUsername.setText("bob");
+                controller.passwordfieldPassword.setText("hunter2");
                 controller.onSignUp();
 
                 assertNull(sceneManager.lastScene, "Duplicate sign up should not navigate away");
@@ -162,10 +184,37 @@ class AuthControllerTest {
                 controller.onSignUp();
 
                 sceneManager.lastScene = null;
+                controller.textfieldUsername.setText("carol");
+                controller.passwordfieldPassword.setText("letmein");
                 controller.onLogIn();
 
                 assertEquals("practice", sceneManager.lastScene);
                 assertEquals("", controller.labelMessage.getText());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    @Test
+    void logInWithCorrectCredentials_setsCurrentUsernameOnSceneManager(@TempDir Path tempDir) throws Exception {
+        runOnFxThreadAndWait(() -> {
+            try {
+                AuthController controller = createController();
+                FakeSceneManager sceneManager = new FakeSceneManager();
+                controller.setSceneManager(sceneManager);
+                useTempAuthenticator(controller, tempDir.resolve("accounts.json"));
+
+                controller.textfieldUsername.setText("carol");
+                controller.passwordfieldPassword.setText("letmein");
+                controller.onSignUp();
+
+                sceneManager.setCurrentUsername(null);
+                controller.textfieldUsername.setText("carol");
+                controller.passwordfieldPassword.setText("letmein");
+                controller.onLogIn();
+
+                assertEquals("carol", sceneManager.getCurrentUsername());
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -186,6 +235,7 @@ class AuthControllerTest {
                 controller.onSignUp();
 
                 sceneManager.lastScene = null;
+                controller.textfieldUsername.setText("dave");
                 controller.passwordfieldPassword.setText("wrongpassword");
                 controller.onLogIn();
 
@@ -211,6 +261,8 @@ class AuthControllerTest {
                 controller.onSignUp();
 
                 sceneManager.lastScene = null;
+                controller.textfieldUsername.setText("erin");
+                controller.passwordfieldPassword.setText("passw0rd");
                 controller.onPassword();
 
                 assertEquals("practice", sceneManager.lastScene, "Pressing Enter in the password field should submit login");
@@ -221,15 +273,23 @@ class AuthControllerTest {
     }
 
     @Test
-    void onUsernameDoesNotThrow() throws Exception {
+    void onUsernameMovesFocusToPasswordField() throws Exception {
         runOnFxThreadAndWait(() -> {
             AuthController controller = createController();
             FakeSceneManager sceneManager = new FakeSceneManager();
             controller.setSceneManager(sceneManager);
 
+            // Deliberately no Stage/show() here - real window focus needs a window
+            // manager, which headless CI runners (Xvfb) don't have, and requesting
+            // it hangs indefinitely there. Scene tracks its own focus owner without
+            // needing a shown window, so that's enough to verify the redirect.
+            javafx.scene.Scene scene = new javafx.scene.Scene(new javafx.scene.layout.VBox(
+                controller.textfieldUsername, controller.passwordfieldPassword));
+
             controller.onUsername();
 
-            assertNull(sceneManager.lastScene);
+            assertEquals(controller.passwordfieldPassword, scene.getFocusOwner());
+            assertNull(sceneManager.lastScene, "Pressing Enter in the username field should not navigate away");
         });
     }
 
@@ -327,6 +387,52 @@ class AuthControllerTest {
             assertTrue(controller.passwordfieldPassword.isVisible());
             assertFalse(controller.textfieldPasswordVisible.isVisible());
             assertEquals("Show", controller.linkTogglePassword.getText());
+        });
+    }
+
+    @Test
+    void onSignUp_success_clearsUsernameAndPassword(@TempDir Path tempDir) throws Exception {
+        runOnFxThreadAndWait(() -> {
+            try {
+                AuthController controller = createController();
+                FakeSceneManager sceneManager = new FakeSceneManager();
+                controller.setSceneManager(sceneManager);
+                useTempAuthenticator(controller, tempDir.resolve("accounts.json"));
+
+                controller.textfieldUsername.setText("grace");
+                controller.passwordfieldPassword.setText("hopper123");
+                controller.onSignUp();
+
+                assertEquals("", controller.textfieldUsername.getText());
+                assertEquals("", controller.passwordfieldPassword.getText());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    @Test
+    void onLogIn_success_clearsUsernameAndPassword(@TempDir Path tempDir) throws Exception {
+        runOnFxThreadAndWait(() -> {
+            try {
+                AuthController controller = createController();
+                FakeSceneManager sceneManager = new FakeSceneManager();
+                controller.setSceneManager(sceneManager);
+                useTempAuthenticator(controller, tempDir.resolve("accounts.json"));
+
+                controller.textfieldUsername.setText("heidi");
+                controller.passwordfieldPassword.setText("letmein456");
+                controller.onSignUp();
+
+                controller.textfieldUsername.setText("heidi");
+                controller.passwordfieldPassword.setText("letmein456");
+                controller.onLogIn();
+
+                assertEquals("", controller.textfieldUsername.getText());
+                assertEquals("", controller.passwordfieldPassword.getText());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         });
     }
 

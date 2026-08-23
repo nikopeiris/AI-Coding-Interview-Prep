@@ -7,6 +7,7 @@
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
 <BorderPane fx:id="codingRoot" prefHeight="760" prefWidth="1200" stylesheets="@../css/main.css" xmlns="http://javafx.com/javafx/24.0.1" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.aicodinginterviewprep.controllers.CodingController">
@@ -16,7 +17,12 @@
    </padding>
 
    <top>
-      <Button fx:id="buttonReturn" mnemonicParsing="false" onAction="#onReturn" text="Return" />
+      <HBox alignment="CENTER_LEFT" spacing="10">
+         <Button fx:id="buttonReturn" mnemonicParsing="false" onAction="#onReturn" text="Return" />
+         <Region HBox.hgrow="ALWAYS" />
+         <Label fx:id="labelLoggedInAs" styleClass="muted-label" />
+         <Button fx:id="buttonLogOut" mnemonicParsing="false" onAction="#onLogOut" text="Log Out" />
+      </HBox>
    </top>
 
    <!-- ===== LeetCode-style question output ===== -->
@@ -30,14 +36,14 @@
       </VBox>
    </left>
 
-   <!-- ===== Code editor (fills the remaining space) ===== -->
+   <!-- ===== Code editor (fills the remaining space; CodeArea built in CodingController) ===== -->
    <center>
       <VBox>
          <padding>
             <Insets bottom="8" left="8" right="8" top="8" />
          </padding>
          <Label styleClass="section-label" text="Code editor" />
-         <TextArea fx:id="codeEditor" prefHeight="633.0" prefRowCount="20" text="// Write your code here" wrapText="true" VBox.vgrow="ALWAYS" />
+         <StackPane fx:id="codeEditorContainer" styleClass="code-editor-shell" VBox.vgrow="ALWAYS" />
       </VBox>
    </center>
 
