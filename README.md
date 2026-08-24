@@ -128,3 +128,7 @@ own use of generative AI tools below.
   4: Generated follow up test cases from initially written test cases.
   5: Explanation of why unable to achieve particular branch for coverage. 
   All AI-assisted output was reviewed and tested before committed.
+
+- **Neia Tererei**: Used Claude for planning interface design and controller infrastructure; used it
+  to construct CSS styling for fxml scenes; and used it for generating test cases on relevant
+  controller classes. All AI-assisted output was reviewed and tested before being committed.
